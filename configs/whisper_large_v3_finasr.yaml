@@ -1,0 +1,15 @@
+model: openai/whisper-large-v3
+dataset: finasr
+layers: [-8, -7, -6, -5, -4, -3, -2, -1]
+adapter_dim: 128
+index_dim: 64
+value_dim: 64
+rank: 16
+num_heads: 4
+compression_rate: 4
+top_k: 8
+compressor: event
+query_chunk_size: 256
+memory_chunk_size: 512
+learning_rate: 0.0001
+
