@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+source "$(dirname "${BASH_SOURCE[0]}")/_repo_env.sh"
 BASE_RUN="${RUN_DIR:-runs/routing}"
 for mode in direct warm dense; do
   extra=()

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+source "$(dirname "${BASH_SOURCE[0]}")/_repo_env.sh"
 DATA_DIR="${DATA_DIR:-data/earnings22_622}"
 CACHE_DIR="${CACHE_DIR:-cache/earnings22_large_v3}"
 MODEL="${MODEL:-openai/whisper-large-v3}"
