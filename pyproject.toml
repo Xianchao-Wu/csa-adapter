@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "csa-adapter"
-version = "0.2.0"
+version = "0.2.1"
 description = "Parameter-efficient compressed sparse adaptation for ASR"
 readme = "README.md"
 requires-python = ">=3.10"
