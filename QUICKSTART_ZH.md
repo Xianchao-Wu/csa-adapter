@@ -1,4 +1,7 @@
-# 中文运行说明
+# CSA-Adapter v0.2.1 快速开始
+
+> v0.2.1 是针对长音频 memory inference 稳定性的补丁。旧 v0.2 的 encoder feature cache 可以继续使用，但 adapter checkpoint 需要重新训练。建议先阅读 `PATCH_NOTES_v0.2.1.md`。
+
 
 本版本实现跨段持久声学记忆：冻结 Whisper，在最终 encoder 输出后加入一个
 CSA-Adapter，读取历史片段，解码成功后才写入当前片段。默认约 52.9 万可训练参数。
@@ -6,8 +9,8 @@ CSA-Adapter，读取历史片段，解码成功后才写入当前片段。默认
 ## 推荐先跑：Earnings-22 自定义 6:2:2
 
 ```bash
-unzip csa-adapter-v0.2.zip
-cd csa-adapter-v0.2
+unzip csa-adapter-v0.2.1.zip
+cd csa-adapter-v0.2.1
 bash scripts/00_setup.sh
 bash scripts/01_prepare_earnings22.sh
 GPUS=0,1,2,3,4,5,6,7 bash scripts/02_cache_features.sh
@@ -63,3 +66,42 @@ RUN_DIR=runs/csa_small_history bash scripts/03_train.sh \
 目录已存在时训练不会覆盖，也不提供优化器恢复；新实验设置新的 RUN_DIR。
 旧 v0.1 adapter 权重不能直接作为 v0.2 跨段记忆 checkpoint 使用，需要重新训练。
 更多模块说明、消融命令和限制参见 README.md；已执行的检查参见 VALIDATION.md。
+## H100 8卡推荐复现流程（v0.2.1）
+
+如果 v0.2 已经生成了 `cache/earnings22_large_v3/{train,validation}`，可以直接复用，不需要重新 cache。
+
+先用 8 张 H100 做稳定性筛查（default hard-sparse 与旧 warm100，各 4 个 seed）：
+
+```bash
+export PYTHONPATH=$PWD/src:$PYTHONPATH
+GPUS=0,1,2,3,4,5,6,7 \
+  bash scripts/run_h100_v021_stability_8gpu.sh
+```
+
+确认没有大面积 empty hypothesis 后，再跑完整 priority matrix：
+
+```bash
+GPUS=0,1,2,3,4,5,6,7 \
+  bash scripts/run_h100_v021_priority_8gpu.sh
+```
+
+该脚本会：8卡并行训练 → 对每个保存的 checkpoint 跑 long-form validation → 按 validation WER-N 选 checkpoint/seed → 再跑 E22 test 与 E21 external test。主比较默认关闭 text history，避免把文本 prompt 的不稳定性混入 acoustic-memory 结论。
+
+### 重要：确认当前仓库代码被 Python 使用
+
+v0.2.1 的所有 `scripts/*.sh` 现在都会自动把当前仓库的 `src/` 放到
+`PYTHONPATH` 最前面，并在 H100 脚本启动时运行 preflight。正常启动时应看到：
+
+```text
+[preflight] package   : .../csa-adapter-v0.2.1/src/csa_adapter
+[preflight] v0.2.1 CLI/source checks: OK
+```
+
+如果你手工调用 Python，也建议先执行：
+
+```bash
+export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+python scripts/preflight_v021.py
+```
+
+这可以避免系统 site-packages 中残留的旧 `csa-adapter` 覆盖当前源码。

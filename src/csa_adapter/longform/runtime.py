@@ -12,6 +12,9 @@ from transformers.modeling_outputs import BaseModelOutput
 from .memory import MemoryConfig, PersistentCSA
 
 
+ADAPTER_FORMAT = "persistent-csa-v0.2.1"
+
+
 def amp(device):
     return (
         torch.autocast("cuda", dtype=torch.bfloat16)
@@ -74,11 +77,30 @@ def encode(model, processor, audio, device):
     return h, nvalid
 
 
-def adapt_valid(adapter, hidden, nvalid, memory, dense=False, temperature=1.0):
+def adapt_valid(
+    adapter,
+    hidden,
+    nvalid,
+    memory,
+    dense=False,
+    temperature=1.0,
+    return_diagnostics=False,
+):
     # Padded encoder states are retained for compatibility with the frozen decoder,
     # but never written into acoustic memory or modified by the adapter.
-    changed = adapter(hidden[:, :nvalid], memory, dense=dense, temperature=temperature)
-    return torch.cat([changed, hidden[:, nvalid:]], dim=1)
+    if not 0 <= nvalid <= hidden.shape[1]:
+        raise ValueError("nvalid is outside encoder sequence length")
+    result = adapter(
+        hidden[:, :nvalid],
+        memory,
+        dense=dense,
+        temperature=temperature,
+        return_diagnostics=return_diagnostics,
+    )
+    if return_diagnostics:
+        changed, stats = result
+        return torch.cat([changed, hidden[:, nvalid:]], dim=1), stats
+    return torch.cat([result, hidden[:, nvalid:]], dim=1)
 
 
 def labels_for(processor, text, model):
@@ -111,7 +133,7 @@ def save_adapter(path, adapter, identity, info):
     (path / "adapter_config.json").write_text(
         json.dumps(
             dict(
-                format="persistent-csa-v0.2",
+                format=ADAPTER_FORMAT,
                 config=asdict(adapter.cfg),
                 backbone=identity,
                 training=info,
@@ -124,9 +146,17 @@ def save_adapter(path, adapter, identity, info):
 def load_adapter(path, identity, device):
     from safetensors.torch import load_file
 
-    data = json.loads((Path(path) / "adapter_config.json").read_text())
-    if data["format"] != "persistent-csa-v0.2" or data["backbone"] != identity:
+    path = Path(path)
+    data = json.loads((path / "adapter_config.json").read_text())
+    if data.get("format") != ADAPTER_FORMAT:
+        raise ValueError(
+            f"Adapter format {data.get('format')!r} is not {ADAPTER_FORMAT!r}. "
+            "v0.2.1 changes residual stability semantics; retrain instead of silently migrating."
+        )
+    if data["backbone"] != identity:
         raise ValueError("Adapter/backbone identity mismatch; use exact model and revision")
     module = PersistentCSA(MemoryConfig(**data["config"])).to(device)
-    module.load_state_dict(load_file(str(Path(path) / "adapter.safetensors")), strict=True)
+    module.load_state_dict(load_file(str(path / "adapter.safetensors")), strict=True)
+    if not all(torch.isfinite(p).all() for p in module.parameters()):
+        raise FloatingPointError("Adapter checkpoint contains non-finite parameters")
     return module.eval()
