@@ -1,38 +1,32 @@
-# Validation record — v0.2
+# Validation record — v0.2.1 patch
 
-Executed in the delivery environment (CPU, Python 3.12, torch 2.14.0+cpu,
-Transformers 4.57.6, Datasets 3.6.0). CUDA/PyTorch supplied by the user's container
-is retained by the setup script; BF16 GPU behavior has not been benchmarked here.
+## Executed in the delivery environment
 
-- 18 pytest tests passed, including legacy basic-module tests.
-- Exact chunked top-k matches dense ranking; selecting all memories matches dense reading.
-- Current ASR loss reaches historical compressor, event scorer, query and key parameters;
-  detached historical backbone features and frozen Whisper weights receive no gradients.
-- Real Hugging Face Whisper decoder forward/backward and generate exercised on a tiny
-  random configuration, including prompt_ids and precomputed encoder_outputs.
-- Empty-memory identity, untouched padding, FIFO retention, duplicate/overlap rejection,
-  call reset, checkpoint round trip, backbone mismatch and incomplete cache guards tested.
-- Five-call synthetic data preparation exercised chronological packing, call-level
-  splitting, explicit oversize exclusion reports and preservation of full test waveforms.
-- End-to-end CLI smoke run with a tiny random Whisper and the public Whisper tokenizer:
-  two 3-segment caches -> two optimizer steps (dense then hard top-k) -> best/last
-  safetensors -> full-waveform decoding across three windows with history + text prompts.
-  This is a functionality check, NOT an ASR accuracy measurement.
-- Ruff checks, Python compilation and Bash syntax checks passed.
+The delivery container has Python 3.13.5 and PyTorch 2.10.0+cpu.  It does not have network access and does not contain the pinned Transformers/JiWER dependencies, so a real Whisper/H100 end-to-end run cannot be executed here.
 
-Source verification: public E22/E21 dataset cards and API revision metadata were read.
-Actual E22 chunked rows were fetched and confirmed to have file_id, segment_id,
-transcription, start_ts and end_ts; their storage order was not chronological.
-The final synchronous projected Parquet reader fetched actual E22 metadata and
-exited normally; local Parquet projection is also unit-tested. Complete 125-call
-audio preparation/download has NOT been run end-to-end here. Source loading requires
-reachable Hugging Face file/CDN endpoints on the experiment machine.
+The following checks were executed locally on the delivered source tree:
 
-No full Earnings training, pretrained large-v3 accuracy evaluation, GPU throughput
-measurement or comparison against LoRA was performed. No numerical accuracy gains
-are claimed. Use scripts/07_smoke_train.sh before the full training run and inspect
-preparation_report.json, validation logs and generation token-cap diagnostics.
+- Python compilation for all `src/`, `tests/`, and Python scripts.
+- Bash syntax checks for every shell script.
+- Existing dependency-light pytest suite: config/module tests passed.
+- Focused executable `PersistentCSA` tests covering:
+  - exact identity with empty history;
+  - sparse historical reading;
+  - differentiable historical writer while frozen raw history remains detached;
+  - smooth alpha bound;
+  - forced residual-cap activation and numerical bound verification;
+  - finite diagnostics;
+  - FIFO capacity and call reset.
+- Checkpoint-format/save-load logic was reviewed and the format was intentionally bumped to v0.2.1.
+- H100 scripts were syntax checked and use eight independent single-GPU jobs rather than DDP.
 
-Known deliberate scope limits: fixed nonoverlapping evaluation windows instead of
-native timestamp-seek; single-GPU training; FIFO instead of hierarchical retention;
-no optimizer resume; no automatic numeric/entity scoring; no v0.1 checkpoint migration.
+## Must be validated on the user's H100 machine
+
+The following require the user's installed Transformers 4.57.6, Whisper-large-v3 weights, prepared Earnings manifests/caches, and CUDA/BF16 hardware:
+
+1. `bash scripts/run_h100_v021_stability_8gpu.sh`
+2. inspect `stability_summary.tsv` for empty chunks and residual diagnostics;
+3. if stable, `bash scripts/run_h100_v021_priority_8gpu.sh`;
+4. inspect long-form validation checkpoint selection before using E22/E21 test numbers.
+
+No new accuracy claim is made by this patch before those GPU runs complete.

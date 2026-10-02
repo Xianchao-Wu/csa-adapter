@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+source "$(dirname "${BASH_SOURCE[0]}")/_repo_env.sh"
 export HF_HUB_DOWNLOAD_TIMEOUT="${HF_HUB_DOWNLOAD_TIMEOUT:-60}"
 # Alternative: E22 custom 100 train /25 validation calls; E21 all 44 calls external test.
 export DATA_DIR="${DATA_DIR:-data/earnings22_8020}"

@@ -275,3 +275,68 @@ def test_projected_parquet_metadata_reader(tmp_path, monkeypatch):
     assert rows == [
         dict(file_id="1", segment_id="0", transcription="hello", start_ts=0.0, end_ts=1.0)
     ]
+
+
+def test_v021_residual_is_bounded_and_diagnostics_are_finite():
+    torch.manual_seed(3)
+    a = adapter(alpha_init=0.05, alpha_max=0.10, gate_bias_init=2.0, residual_ratio_cap=1e-4)
+    # Force a deliberately large reader/output so the safety cap is exercised.
+    with torch.no_grad():
+        a.out.weight.fill_(1000.0)
+    h = torch.randn(1, 6, 16)
+    mem = a.compress(torch.randn(1, 8, 16))
+    out, stats = a(h, mem, return_diagnostics=True)
+    delta = out - h
+    base_rms = h.float().square().mean(-1).sqrt()
+    delta_rms = delta.float().square().mean(-1).sqrt()
+    assert torch.all(delta_rms <= 1.01e-4 * base_rms + 1e-6)
+    assert 0.0 < stats["alpha_effective"] <= 0.10
+    assert 0.0 <= stats["gate_mean"] <= 1.0
+    assert 0.0 <= stats["residual_clip_fraction"] <= 1.0
+    assert stats["residual_ratio"] <= 1.01e-4
+    assert np.isfinite(list(v for v in stats.values() if isinstance(v, float))).all()
+
+
+def test_v021_effective_alpha_is_smoothly_bounded():
+    a = adapter(alpha_init=0.01, alpha_max=0.05)
+    with torch.no_grad():
+        a.alpha.fill_(1000.0)
+    assert float(a.effective_alpha()) <= 0.05 + 1e-7
+    with torch.no_grad():
+        a.alpha.fill_(-1000.0)
+    assert float(a.effective_alpha()) >= -0.05 - 1e-7
+
+
+def test_v021_empty_memory_diagnostics_preserve_exact_identity():
+    a = adapter()
+    h = torch.randn(1, 5, 16)
+    out, stats = a(h, None, return_diagnostics=True)
+    assert torch.equal(out, h)
+    assert stats["memory_entries_before"] == 0
+    assert stats["residual_ratio"] == 0.0
+    assert stats["adapted_cosine"] == 1.0
+
+
+def test_prompt_ids_are_rank_one_and_bounded():
+    from types import SimpleNamespace
+    from csa_adapter.longform.evaluate import prompt_ids_for_text
+
+    class Tok:
+        def encode(self, text, add_special_tokens=False):
+            assert add_special_tokens is False
+            return list(range(1, len(text.split()) + 1))
+
+        def decode(self, ids, skip_special_tokens=True):
+            return " ".join(f"w{i}" for i in ids)
+
+    class Proc:
+        tokenizer = Tok()
+
+        def get_prompt_ids(self, text, return_tensors="pt"):
+            assert return_tensors == "pt"
+            return torch.tensor([[99, 1, 2, 3]])
+
+    ids, text, count = prompt_ids_for_text(Proc(), "a b c d e", 3, "cpu")
+    assert ids.ndim == 1
+    assert count == 4
+    assert text == "w3 w4 w5"

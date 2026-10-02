@@ -1,4 +1,6 @@
-# CSA-Adapter v0.2 — persistent acoustic memory for segmented Whisper ASR
+# CSA-Adapter v0.2.1 — persistent acoustic memory for segmented Whisper ASR
+
+> **v0.2.1 stability patch.** This version adds bounded residual strength, a per-token residual RMS safety cap, negative gate initialization, segment-level diagnostics, and long-form checkpoint selection. Existing v0.2 frozen-encoder feature caches can be reused, but v0.2 adapter checkpoints must be retrained. See `PATCH_NOTES_v0.2.1.md`.
 
 Research prototype: frozen Whisper + trainable compressed historical acoustic memory.
 This release implements the **cross-segment** design discussed in the CSA-Adapter draft.
@@ -15,8 +17,8 @@ SoundFile wheel includes MP3 decoding; install system libsndfile/ffmpeg if your 
 build cannot decode the source MP3s. FFmpeg is not automatically called by this code.
 
 ```bash
-unzip csa-adapter-v0.2.zip
-cd csa-adapter-v0.2
+unzip csa-adapter-v0.2.1.zip
+cd csa-adapter-v0.2.1
 bash scripts/00_setup.sh
 bash scripts/01_prepare_earnings22.sh
 GPUS=0,1,2,3,4,5,6,7 bash scripts/02_cache_features.sh
@@ -117,9 +119,9 @@ acoustic window. The adapter's queries see only previously committed segments.
 
 The mean and event branches use independent W_c and W_e. A single learned scoring
 vector u is shared across windows. The default gate is `sigmoid(w_g * LN(H) + b_g)`
-(elementwise, 2D parameters), instead of the earlier dense D-by-D gate. Alpha starts
-at 0.01 to let writer/indexer gradients flow immediately; empty history still yields
-an exact identity. No time-distance bias or content-aware memory eviction is included.
+(elementwise, 2D parameters), instead of the earlier dense D-by-D gate. The diagonal gate starts with bias -2.0 and the effective alpha starts at 0.01.
+The effective alpha is smoothly bounded and the applied residual has a per-token RMS
+safety cap; empty history still yields an exact identity. No time-distance bias or content-aware memory eviction is included.
 
 Training recompresses historical **detached raw encoder features**, using the current
 writer parameters on every step. Compressed Z is not detached. Frozen decoder forward
@@ -180,7 +182,7 @@ It has no VAD, word-boundary overlap stitching, or temperature fallback. Boundar
 errors affect every compared system under the same segmentation.
 
 The matrix includes baseline text-history off/on and CSA history text-history off/on.
-Text history uses the last 128 tokens of **predicted** text as a bounded prompt.
+Text history is a secondary inference ablation. By default it uses at most 64 tokens from the **immediately previous predicted chunk** as a bounded prompt; `--text-history-mode rolling` restores bounded accumulated history.
 This is not a byte-for-byte reproduction of native condition_on_previous_text reset
 semantics. It is disabled during training and evaluated as an inference ablation.
 The reset-memory ablation is an exact identity for this historical-only adapter;
@@ -216,7 +218,7 @@ The CPU feature LRU defaults to 128 segments (~0.5 GB at large-v3); it is config
 
 ## GitHub
 
-The ZIP has one top-level csa-adapter-v0.2 directory and includes tests, scripts,
+The ZIP has one top-level csa-adapter-v0.2.1 directory and includes tests, scripts,
 pyproject.toml, CI and .gitignore. Data, caches, outputs and model weights are ignored.
 
 ```bash
