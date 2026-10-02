@@ -13,8 +13,13 @@ LOG_DIR="${LOG_DIR:-logs/frozen_baselines/fastconformer_hybrid_large_pc}"
 GPU_LIST="${GPU_LIST:-0,1,2}"
 DATASETS="${DATASETS:-validation,test,e21}"
 DECODER="${DECODER:-rnnt}"
+#<<<<<<< HEAD
 BATCH_SIZE="${BATCH_SIZE:-1}"
 NUM_WORKERS="${NUM_WORKERS:-1}"
+#======= TODO ====
+#BATCH_SIZE="${BATCH_SIZE:-32}"
+#NUM_WORKERS="${NUM_WORKERS:-4}"
+#>>>>>>> origin/integrate/h200-02-v021
 PY_SCRIPT="${PY_SCRIPT:-scripts/eval_fastconformer_frozen.py}"
 
 mkdir -p "$OUT_ROOT" "$LOG_DIR"

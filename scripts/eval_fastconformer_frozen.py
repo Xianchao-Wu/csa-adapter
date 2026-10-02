@@ -155,9 +155,13 @@ def flatten_manifest(rows: List[Dict[str, Any]], temp_root: Path) -> List[Dict[s
                 "audio_filepath": audio,
                 "text": ref,
                 "call_id": parent_call,
+                #<<<<<<< HEAD
                 #"segment_index": int(first_of(row, ["segment_index", "segment_id", "index"], row_idx)),
                 "segment_index": row_idx,
                 "segment_id": str(first_of(row, ["segment_id", "id"], f"segment-{row_idx:07d}")),
+                #=======
+                #"segment_index": int(first_of(row, ["segment_index", "segment_id", "index"], row_idx)),
+                #>>>>>>> origin/integrate/h200-02-v021
                 "duration": None if dur is None else float(dur),
                 "source_row": row_idx,
             })
