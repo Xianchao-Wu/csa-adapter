@@ -2,7 +2,7 @@
 # File Name: code.rsync.sh
 # Author: Xianchao Wu
 # mail: xianchaow@nvidia.com
-# Created Time: Fri Oct  2 00:55:04 2026
+# Created Time: Fri Oct  2 01:12:02 2026
 #########################################################################
 #!/bin/bash
 
@@ -14,4 +14,6 @@ rsync -av \
     --exclude='*.pyc' \
     --exclude='cache/' \
     --exclude='data/' \
+    --exclude='*.zip' \
     ../csa-adapter-v0.2.1/ ./
+
