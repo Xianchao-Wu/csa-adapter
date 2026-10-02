@@ -1,32 +1,19 @@
-# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
 build/
 dist/
-.pytest_cache/
-
-# Virtual environments
-.venv/
-venv/
-env/
-
-# Logs / temporary files
-*.log
-log.*
-*.out
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-
-# Model/cache
-.cache/
-cache/
 data/
-checkpoints/
-outputs/
+cache/
 runs/
+outputs/
+*.pt
+*.safetensors
+*.wav
+*.flac
+*.mp3
+*.zip
+.env
